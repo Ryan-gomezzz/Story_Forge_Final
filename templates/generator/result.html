@@ -1,0 +1,515 @@
+{% extends "base.html" %}
+
+{% block title %}{{ story.prompt|truncatechars:50 }} - StoryForge AI Enhanced{% endblock %}
+
+{% block content %}
+<div class="container">
+    <!-- Header -->
+    <div class="row justify-content-center mb-4">
+        <div class="col-lg-10 text-center">
+            <h1 class="hero-title">🎭 Your Epic Story is Complete! 🎭</h1>
+            <p class="hero-subtitle">
+                Generated using advanced AI models with 
+                {% if story.input_method == 'audio' %}voice input
+                {% elif story.input_method == 'both' %}text and voice input
+                {% else %}text input{% endif %}
+            </p>
+            <div class="d-flex justify-content-center gap-3 flex-wrap">
+                <a href="{% url 'generator:index' %}" class="btn btn-outline-light btn-lg">
+                    <i class="bi bi-plus-circle me-2"></i>Create Another Story
+                </a>
+                {% if story.composed_image %}
+                <a href="{% url 'generator:download' story.id 'composed' %}" class="btn btn-gradient btn-lg">
+                    <i class="bi bi-download me-2"></i>Download Scene
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Story Analytics -->
+    <div class="row justify-content-center mb-4">
+        <div class="col-lg-10">
+            <div class="glass-card p-3">
+                <div class="row text-center">
+                    <div class="col-md-3 col-6 mb-2">
+                        <div class="stat-item">
+                            <div class="stat-number">{{ story_stats.word_count }}</div>
+                            <div class="stat-label">Words</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-6 mb-2">
+                        <div class="stat-item">
+                            <div class="stat-number">{{ story_stats.generation_time|floatformat:1 }}s</div>
+                            <div class="stat-label">Generated In</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-6 mb-2">
+                        <div class="stat-item">
+                            <div class="stat-number">
+                                {% if story.ai_model_used %}
+                                    {{ story.ai_model_used|truncatechars:20 }}
+                                {% else %}
+                                    Enhanced AI
+                                {% endif %}
+                            </div>
+                            <div class="stat-label">AI Model</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-6 mb-2">
+                        <div class="stat-item">
+                            <div class="stat-number">{{ story_stats.input_method }}</div>
+                            <div class="stat-label">Input Method</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audio Input Display -->
+    {% if story.input_method == 'audio' or story.input_method == 'both' %}
+    <div class="row justify-content-center mb-4">
+        <div class="col-lg-10">
+            <div class="glass-card p-4">
+                <h4 class="fw-bold text-primary mb-3">
+                    <i class="bi bi-mic me-2"></i>Audio Input
+                </h4>
+                {% if story.audio_file %}
+                    <div class="audio-player mb-3">
+                        <audio controls class="w-100">
+                            <source src="{{ story.audio_file.url }}" type="audio/mpeg">
+                            Your browser does not support the audio element.
+                        </audio>
+                    </div>
+                {% endif %}
+                {% if story.transcribed_text %}
+                    <div class="transcription-box">
+                        <h6 class="fw-semibold">Transcribed Text:</h6>
+                        <p class="fst-italic">"{{ story.transcribed_text }}"</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Story Content -->
+    <div class="row justify-content-center mb-5">
+        <div class="col-lg-10">
+            <div class="glass-card p-5">
+                <div class="text-center mb-4">
+                    <div class="feature-icon">
+                        <i class="bi bi-book-open"></i>
+                    </div>
+                    <h2 class="fw-bold text-primary">Your Epic Tale</h2>
+                    {% if story.prompt %}
+                    <div class="alert alert-light border-0 shadow-sm mb-4">
+                        <h6 class="fw-semibold text-muted mb-2">
+                            <i class="bi bi-lightbulb me-2"></i>Original Prompt:
+                        </h6>
+                        <p class="mb-0 fst-italic">"{{ story.prompt }}"</p>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="story-content">
+                    <div class="story-text p-4 enhanced-story-display">
+                        {{ story.story_text|linebreaks }}
+                    </div>
+                </div>
+
+                <!-- Story Actions -->
+                <div class="story-actions mt-4 text-center">
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-outline-primary" onclick="shareStory()">
+                            <i class="bi bi-share me-1"></i>Share
+                        </button>
+                        <button type="button" class="btn btn-outline-success" onclick="copyStory()">
+                            <i class="bi bi-clipboard me-1"></i>Copy Text
+                        </button>
+                        <button type="button" class="btn btn-outline-warning" onclick="toggleFavorite()">
+                            <i class="bi bi-heart me-1"></i>Favorite
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Character & Background Analysis -->
+    <div class="row mb-5">
+        <div class="col-md-6 mb-4">
+            <div class="glass-card p-4 h-100">
+                <h4 class="fw-bold text-primary mb-3">
+                    <i class="bi bi-person-circle me-2"></i>Character Analysis
+                </h4>
+                <div class="analysis-content">
+                    <p class="text-muted">{{ story.character_description }}</p>
+                    <div class="analysis-tags mt-3">
+                        {% if 'knight' in story.character_description|lower %}
+                            <span class="badge bg-primary me-1">Medieval</span>
+                        {% endif %}
+                        {% if 'wizard' in story.character_description|lower %}
+                            <span class="badge bg-purple me-1">Magic</span>
+                        {% endif %}
+                        {% if 'space' in story.character_description|lower %}
+                            <span class="badge bg-info me-1">Sci-Fi</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-4">
+            <div class="glass-card p-4 h-100">
+                <h4 class="fw-bold text-primary mb-3">
+                    <i class="bi bi-geo-alt me-2"></i>Scene Analysis
+                </h4>
+                <div class="analysis-content">
+                    <p class="text-muted">{{ story.background_description }}</p>
+                    <div class="analysis-tags mt-3">
+                        {% if 'forest' in story.background_description|lower %}
+                            <span class="badge bg-success me-1">Nature</span>
+                        {% endif %}
+                        {% if 'castle' in story.background_description|lower %}
+                            <span class="badge bg-secondary me-1">Architecture</span>
+                        {% endif %}
+                        {% if 'space' in story.background_description|lower %}
+                            <span class="badge bg-dark me-1">Cosmic</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Generated Images Gallery -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="glass-card p-4">
+                <h3 class="fw-bold text-center mb-4">
+                    <i class="bi bi-images text-primary me-2"></i>AI-Generated Artwork
+                </h3>
+
+                <!-- Main Composed Image -->
+                {% if story.composed_image %}
+                <div class="composed-image-showcase mb-4">
+                    <div class="main-image-container">
+                        <img src="{{ story.composed_image.url }}" class="main-story-image" alt="Final Composed Scene">
+                        <div class="image-info-overlay">
+                            <div class="image-info">
+                                <h5 class="text-white fw-bold">Final Composed Scene</h5>
+                                <p class="text-white-50 mb-2">Character + Background Merged</p>
+                                <a href="{% url 'generator:download' story.id 'composed' %}" class="btn btn-light btn-sm">
+                                    <i class="bi bi-download me-1"></i>Download HD
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Individual Images -->
+                <div class="row g-4">
+                    {% if story.character_image %}
+                    <div class="col-lg-6">
+                        <div class="image-card">
+                            <div class="image-container-enhanced">
+                                <img src="{{ story.character_image.url }}" class="enhanced-image" alt="Character">
+                                <div class="image-overlay-enhanced">
+                                    <div class="overlay-content">
+                                        <h6 class="text-white fw-bold">Character</h6>
+                                        <p class="text-white-50 small">AI-generated portrait</p>
+                                        <a href="{% url 'generator:download' story.id 'character' %}" class="btn btn-outline-light btn-sm">
+                                            <i class="bi bi-download"></i>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if story.background_image %}
+                    <div class="col-lg-6">
+                        <div class="image-card">
+                            <div class="image-container-enhanced">
+                                <img src="{{ story.background_image.url }}" class="enhanced-image" alt="Background">
+                                <div class="image-overlay-enhanced">
+                                    <div class="overlay-content">
+                                        <h6 class="text-white fw-bold">Background</h6>
+                                        <p class="text-white-50 small">AI-generated scene</p>
+                                        <a href="{% url 'generator:download' story.id 'background' %}" class="btn btn-outline-light btn-sm">
+                                            <i class="bi bi-download"></i>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+
+                {% if not story.character_image and not story.background_image and not story.composed_image %}
+                <div class="text-center py-5">
+                    <div class="loading-animation mb-3">
+                        <div class="loading-dots">
+                            <span></span><span></span><span></span>
+                        </div>
+                    </div>
+                    <h5 class="text-muted">AI is creating your images...</h5>
+                    <p class="text-muted">This may take 30-60 seconds for high-quality generation</p>
+                    <button onclick="location.reload()" class="btn btn-primary mt-3">
+                        <i class="bi bi-arrow-clockwise me-2"></i>Check Progress
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Generation Process -->
+    {% if generation_steps %}
+    <div class="row justify-content-center mb-5">
+        <div class="col-lg-10">
+            <div class="glass-card p-4">
+                <h4 class="fw-bold text-center mb-4">
+                    <i class="bi bi-gear text-primary me-2"></i>Generation Process
+                </h4>
+                <div class="process-timeline">
+                    {% for step in generation_steps %}
+                    <div class="timeline-item {% if step.success %}completed{% else %}failed{% endif %}">
+                        <div class="timeline-marker">
+                            {% if step.success %}
+                                <i class="bi bi-check-circle-fill text-success"></i>
+                            {% else %}
+                                <i class="bi bi-x-circle-fill text-danger"></i>
+                            {% endif %}
+                        </div>
+                        <div class="timeline-content">
+                            <h6 class="fw-semibold">{{ step.step_name|title }}</h6>
+                            {% if step.error_message %}
+                                <p class="text-danger small">{{ step.error_message }}</p>
+                            {% else %}
+                                <p class="text-success small">Completed successfully</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+    .enhanced-story-display {
+        font-family: 'Georgia', serif;
+        font-size: 1.15rem;
+        line-height: 1.8;
+        color: #2c3e50;
+        background: linear-gradient(145deg, #f8f9fa 0%, #ffffff 100%);
+        border-radius: 16px;
+        border-left: 4px solid #667eea;
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    .stat-item {
+        padding: 1rem;
+        border-radius: 12px;
+        background: rgba(255,255,255,0.1);
+    }
+
+    .stat-number {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #667eea;
+    }
+
+    .stat-label {
+        font-size: 0.9rem;
+        color: #6c757d;
+        font-weight: 500;
+    }
+
+    .main-image-container {
+        position: relative;
+        border-radius: 20px;
+        overflow: hidden;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+    }
+
+    .main-story-image {
+        width: 100%;
+        height: 400px;
+        object-fit: cover;
+        transition: transform 0.3s ease;
+    }
+
+    .main-image-container:hover .main-story-image {
+        transform: scale(1.05);
+    }
+
+    .image-info-overlay {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: linear-gradient(transparent, rgba(0,0,0,0.7));
+        padding: 2rem;
+        transform: translateY(100%);
+        transition: transform 0.3s ease;
+    }
+
+    .main-image-container:hover .image-info-overlay {
+        transform: translateY(0);
+    }
+
+    .image-container-enhanced {
+        position: relative;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    }
+
+    .enhanced-image {
+        width: 100%;
+        height: 250px;
+        object-fit: cover;
+        transition: all 0.3s ease;
+    }
+
+    .image-overlay-enhanced {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(45deg, rgba(102,126,234,0.8), rgba(118,75,162,0.8));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+
+    .image-card:hover .image-overlay-enhanced {
+        opacity: 1;
+    }
+
+    .image-card:hover .enhanced-image {
+        transform: scale(1.1);
+    }
+
+    .overlay-content {
+        text-align: center;
+    }
+
+    .transcription-box {
+        background: linear-gradient(145deg, #e3f2fd, #f5f5f5);
+        border-radius: 12px;
+        padding: 1rem;
+        border-left: 4px solid #2196f3;
+    }
+
+    .audio-player audio {
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    .analysis-tags .badge {
+        font-size: 0.75rem;
+        padding: 0.4rem 0.8rem;
+        border-radius: 20px;
+    }
+
+    .bg-purple {
+        background-color: #6f42c1 !important;
+    }
+
+    .process-timeline {
+        position: relative;
+    }
+
+    .timeline-item {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1rem;
+        padding: 1rem;
+        border-radius: 12px;
+        background: rgba(255,255,255,0.5);
+    }
+
+    .timeline-marker {
+        margin-right: 1rem;
+        font-size: 1.5rem;
+    }
+
+    .loading-animation {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .loading-dots span {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #667eea;
+        margin: 0 4px;
+        animation: pulse 1.4s ease-in-out infinite both;
+    }
+
+    .loading-dots span:nth-child(1) { animation-delay: -0.32s; }
+    .loading-dots span:nth-child(2) { animation-delay: -0.16s; }
+
+    @keyframes pulse {
+        0%, 80%, 100% {
+            transform: scale(0);
+            opacity: 0.5;
+        }
+        40% {
+            transform: scale(1);
+            opacity: 1;
+        }
+    }
+</style>
+
+<script>
+function shareStory() {
+    if (navigator.share) {
+        navigator.share({
+            title: 'Check out my AI-generated story!',
+            text: '{{ story.prompt|truncatechars:100 }}',
+            url: window.location.href
+        });
+    } else {
+        navigator.clipboard.writeText(window.location.href).then(() => {
+            alert('Story URL copied to clipboard!');
+        });
+    }
+}
+
+function copyStory() {
+    const storyText = `{{ story.story_text|escapejs }}`;
+    navigator.clipboard.writeText(storyText).then(() => {
+        alert('Story text copied to clipboard!');
+    });
+}
+
+function toggleFavorite() {
+    alert('Favorite feature coming soon!');
+}
+
+// Auto-refresh if images are still being generated
+{% if not story.character_image or not story.background_image %}
+setTimeout(() => {
+    if (document.visibilityState === 'visible') {
+        location.reload();
+    }
+}, 30000);
+{% endif %}
+</script>
+{% endblock %}

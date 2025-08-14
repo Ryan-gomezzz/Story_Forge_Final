@@ -1,0 +1,467 @@
+{% extends "base.html" %}
+
+{% block title %}StoryForge AI Enhanced - Create Magical Stories{% endblock %}
+
+{% block content %}
+<div class="container">
+    <!-- Hero Section -->
+    <div class="row justify-content-center mb-5">
+        <div class="col-lg-10 text-center">
+            <h1 class="hero-title">✨ StoryForge AI Enhanced ✨</h1>
+            <p class="hero-subtitle">
+                Create immersive stories with AI using <strong>text</strong> or <strong>voice input</strong>
+                <br>Powered by LangChain, Stable Diffusion & Whisper
+            </p>
+            {% if audio_supported %}
+                <div class="badge bg-success mb-3">
+                    <i class="bi bi-mic"></i> Audio Input Enabled
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Database Warning -->
+    {% if database_not_ready %}
+    <div class="row justify-content-center mb-4">
+        <div class="col-lg-8">
+            <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                <h5 class="alert-heading">🚨 Database Setup Required</h5>
+                <p class="mb-3">The database tables haven't been created yet. Please run the setup first:</p>
+                <pre class="bg-dark text-light p-2 rounded">python manage.py makemigrations
+python manage.py migrate
+python manage.py runserver</pre>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Main Story Input -->
+    <div class="row justify-content-center mb-5">
+        <div class="col-lg-10">
+            <div class="glass-card p-5">
+                <div class="text-center mb-4">
+                    <div class="feature-icon">
+                        <i class="bi bi-pencil-square"></i>
+                    </div>
+                    <h3 class="fw-bold text-primary">Create Your Epic Story</h3>
+                    <p class="text-muted">Use text or voice to describe your story idea</p>
+                </div>
+
+                <!-- Input Method Selector -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check" name="inputMethod" id="textInput" autocomplete="off" checked>
+                            <label class="btn btn-outline-primary" for="textInput">
+                                <i class="bi bi-keyboard me-2"></i>Text Input
+                            </label>
+
+                            {% if audio_supported %}
+                            <input type="radio" class="btn-check" name="inputMethod" id="audioInput" autocomplete="off">
+                            <label class="btn btn-outline-primary" for="audioInput">
+                                <i class="bi bi-mic me-2"></i>Voice Input
+                            </label>
+
+                            <input type="radio" class="btn-check" name="inputMethod" id="bothInput" autocomplete="off">
+                            <label class="btn btn-outline-primary" for="bothInput">
+                                <i class="bi bi-plus-circle me-2"></i>Text + Voice
+                            </label>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <form id="storyForm" method="post" action="{% url 'generator:generate' %}" enctype="multipart/form-data">
+                    {% csrf_token %}
+
+                    <!-- Text Input Section -->
+                    <div id="textInputSection" class="mb-4">
+                        <label for="prompt" class="form-label fw-semibold fs-5">
+                            <i class="bi bi-lightbulb text-warning me-2"></i>Your Story Idea
+                        </label>
+                        <textarea 
+                            id="prompt" 
+                            name="prompt" 
+                            class="form-control form-control-lg" 
+                            rows="4" 
+                            placeholder="🏰 A brave knight discovers a magical portal in an ancient forest...
+🚀 A space explorer finds mysterious artifacts on a distant planet...
+🧙‍♂️ A young wizard learns to master the elements at magic academy...
+🎭 A time traveler gets stuck in the Renaissance period...
+
+✨ Describe any adventure, fantasy, sci-fi, or mystery scenario!"
+                            maxlength="1000"
+                        ></textarea>
+                        <div class="form-text">
+                            <small class="text-muted">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Enhanced AI will create 500-1500 word stories with realistic images
+                            </small>
+                            <span id="charCounter" class="float-end"></span>
+                        </div>
+                    </div>
+
+                    <!-- Audio Input Section -->
+                    {% if audio_supported %}
+                    <div id="audioInputSection" class="mb-4" style="display: none;">
+                        <label class="form-label fw-semibold fs-5">
+                            <i class="bi bi-mic text-info me-2"></i>Voice Input
+                        </label>
+
+                        <!-- Audio Recording Controls -->
+                        <div class="audio-controls glass-card p-4 mb-3">
+                            <div class="row align-items-center">
+                                <div class="col-md-6">
+                                    <button type="button" id="recordBtn" class="btn btn-outline-danger btn-lg">
+                                        <i class="bi bi-mic"></i> Start Recording
+                                    </button>
+                                    <button type="button" id="stopBtn" class="btn btn-outline-secondary btn-lg ms-2" disabled>
+                                        <i class="bi bi-stop"></i> Stop
+                                    </button>
+                                    <button type="button" id="playBtn" class="btn btn-outline-success btn-lg ms-2" disabled>
+                                        <i class="bi bi-play"></i> Play
+                                    </button>
+                                </div>
+                                <div class="col-md-6 text-end">
+                                    <span id="recordingTime" class="badge bg-secondary">00:00</span>
+                                    <div id="recordingStatus" class="small text-muted mt-1">Ready to record</div>
+                                </div>
+                            </div>
+
+                            <!-- Audio Visualizer -->
+                            <div class="audio-visualizer mt-3">
+                                <canvas id="audioCanvas" width="400" height="60"></canvas>
+                            </div>
+
+                            <!-- Recorded Audio -->
+                            <audio id="recordedAudio" controls class="w-100 mt-3" style="display: none;"></audio>
+                        </div>
+
+                        <!-- File Upload Alternative -->
+                        <div class="glass-card p-3 mb-3">
+                            <label for="audioFile" class="form-label">
+                                <i class="bi bi-upload me-2"></i>Or Upload Audio File
+                            </label>
+                            <input type="file" id="audioFile" name="audio_file" class="form-control" 
+                                   accept="audio/*" capture="microphone">
+                            <div class="form-text">
+                                Supported formats: WAV, MP3, M4A, FLAC (max 10MB, 5 minutes)
+                            </div>
+                        </div>
+
+                        <!-- Transcription Preview -->
+                        <div id="transcriptionPreview" class="glass-card p-3" style="display: none;">
+                            <h6 class="fw-bold text-success">
+                                <i class="bi bi-check-circle me-2"></i>Transcribed Text:
+                            </h6>
+                            <p id="transcribedText" class="mb-0"></p>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Advanced Options -->
+                    <div class="accordion mb-4" id="advancedOptions">
+                        <div class="accordion-item border-0">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#advancedSettings">
+                                    <i class="bi bi-gear me-2"></i>Advanced Settings
+                                </button>
+                            </h2>
+                            <div id="advancedSettings" class="accordion-collapse collapse" data-bs-parent="#advancedOptions">
+                                <div class="accordion-body">
+                                    <div class="row">
+                                        <div class="col-md-4 mb-3">
+                                            <label for="storyLength" class="form-label">Story Length</label>
+                                            <select id="storyLength" class="form-select">
+                                                <option value="medium" selected>Medium (500-1000 words)</option>
+                                                <option value="short">Short (300-500 words)</option>
+                                                <option value="long">Long (1000-1500 words)</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4 mb-3">
+                                            <label for="storyGenre" class="form-label">Preferred Genre</label>
+                                            <select id="storyGenre" class="form-select">
+                                                <option value="any" selected>Any Genre</option>
+                                                <option value="fantasy">Fantasy</option>
+                                                <option value="sci-fi">Science Fiction</option>
+                                                <option value="adventure">Adventure</option>
+                                                <option value="mystery">Mystery</option>
+                                                <option value="romance">Romance</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4 mb-3">
+                                            <label for="imageStyle" class="form-label">Image Style</label>
+                                            <select id="imageStyle" class="form-select">
+                                                <option value="realistic" selected>Realistic</option>
+                                                <option value="artistic">Artistic</option>
+                                                <option value="anime">Anime Style</option>
+                                                <option value="fantasy">Fantasy Art</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Generate Button -->
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-gradient btn-lg py-3" id="generateBtn">
+                            <i class="bi bi-stars me-2"></i>
+                            <span class="btn-text">Generate Epic Story & Images</span>
+                            <span class="btn-loading d-none">
+                                <span class="loading-spinner me-2"></span>
+                                Creating magic...
+                            </span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Enhanced Features Showcase -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="glass-card p-4">
+                <h3 class="fw-bold text-center mb-4">
+                    <i class="bi bi-cpu text-primary me-2"></i>AI-Powered Features
+                </h3>
+                <div class="row">
+                    <div class="col-lg-3 col-md-6 mb-4">
+                        <div class="text-center">
+                            <div class="feature-icon">
+                                <i class="bi bi-chat-square-text"></i>
+                            </div>
+                            <h5 class="fw-bold">LangChain Stories</h5>
+                            <p class="text-muted small">Advanced AI creates 500-1500 word immersive narratives</p>
+                        </div>
+                    </div>
+                    <div class="col-lg-3 col-md-6 mb-4">
+                        <div class="text-center">
+                            <div class="feature-icon">
+                                <i class="bi bi-mic"></i>
+                            </div>
+                            <h5 class="fw-bold">Voice Input</h5>
+                            <p class="text-muted small">Whisper AI transcribes your voice to text</p>
+                        </div>
+                    </div>
+                    <div class="col-lg-3 col-md-6 mb-4">
+                        <div class="text-center">
+                            <div class="feature-icon">
+                                <i class="bi bi-palette"></i>
+                            </div>
+                            <h5 class="fw-bold">Stable Diffusion</h5>
+                            <p class="text-muted small">Realistic character and scene generation</p>
+                        </div>
+                    </div>
+                    <div class="col-lg-3 col-md-6 mb-4">
+                        <div class="text-center">
+                            <div class="feature-icon">
+                                <i class="bi bi-layers"></i>
+                            </div>
+                            <h5 class="fw-bold">Smart Composition</h5>
+                            <p class="text-muted small">Advanced image blending and effects</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Stories Section -->
+    {% if recent_stories %}
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="glass-card p-4">
+                <h3 class="fw-bold text-center mb-4">
+                    <i class="bi bi-clock-history text-primary me-2"></i>Recent Creations
+                </h3>
+                <div class="row">
+                    {% for story in recent_stories %}
+                    <div class="col-lg-4 col-md-6 mb-4">
+                        <div class="card border-0 shadow-sm h-100 story-card">
+                            {% if story.composed_image %}
+                                <div class="image-container">
+                                    <img src="{{ story.composed_image.url }}" class="card-img-top" alt="Story scene">
+                                    <div class="image-overlay">
+                                        <span class="badge bg-dark">
+                                            <i class="bi bi-eye me-1"></i>{{ story.story_word_count }} words
+                                        </span>
+                                    </div>
+                                </div>
+                            {% endif %}
+                            <div class="card-body">
+                                <p class="card-text small text-muted">{{ story.prompt|truncatechars:80 }}</p>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <small class="text-muted">
+                                        <i class="bi bi-{% if story.input_method == 'audio' %}mic{% else %}keyboard{% endif %} me-1"></i>
+                                        {{ story.created_at|timesince }} ago
+                                    </small>
+                                    <a href="{% url 'generator:result' story.id %}" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-eye"></i> View
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+    .story-card {
+        transition: all 0.3s ease;
+        border-radius: 16px;
+        overflow: hidden;
+    }
+
+    .story-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 15px 35px rgba(0,0,0,0.15) !important;
+    }
+
+    .image-container {
+        position: relative;
+        height: 200px;
+        overflow: hidden;
+    }
+
+    .image-container img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.3s ease;
+    }
+
+    .story-card:hover .image-container img {
+        transform: scale(1.05);
+    }
+
+    .image-overlay {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+    }
+
+    .audio-controls {
+        background: linear-gradient(145deg, #f8f9fa, #e9ecef);
+        border-radius: 12px;
+    }
+
+    .audio-visualizer {
+        text-align: center;
+    }
+
+    #audioCanvas {
+        border-radius: 8px;
+        background: rgba(0,0,0,0.1);
+        width: 100%;
+        max-width: 400px;
+        height: 60px;
+    }
+
+    .feature-icon {
+        transition: all 0.3s ease;
+    }
+
+    .glass-card:hover .feature-icon {
+        transform: scale(1.1) rotate(5deg);
+    }
+
+    .loading-spinner {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        border-top-color: white;
+        animation: spin 1s ease-in-out infinite;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .btn-check:checked + .btn-outline-primary {
+        background: var(--gradient-primary);
+        border-color: transparent;
+        color: white;
+    }
+
+    #prompt {
+        font-family: 'Georgia', serif;
+        transition: all 0.3s ease;
+    }
+
+    #prompt:focus {
+        box-shadow: 0 0 20px rgba(102, 126, 234, 0.3);
+        transform: translateY(-2px);
+    }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Input method switching
+    const inputMethods = document.querySelectorAll('input[name="inputMethod"]');
+    const textSection = document.getElementById('textInputSection');
+    const audioSection = document.getElementById('audioInputSection');
+
+    inputMethods.forEach(method => {
+        method.addEventListener('change', function() {
+            if (this.id === 'textInput') {
+                textSection.style.display = 'block';
+                audioSection.style.display = 'none';
+            } else if (this.id === 'audioInput') {
+                textSection.style.display = 'none';
+                audioSection.style.display = 'block';
+            } else if (this.id === 'bothInput') {
+                textSection.style.display = 'block';
+                audioSection.style.display = 'block';
+            }
+        });
+    });
+
+    // Character counter
+    const prompt = document.getElementById('prompt');
+    const counter = document.getElementById('charCounter');
+
+    if (prompt && counter) {
+        function updateCounter() {
+            const remaining = 1000 - prompt.value.length;
+            counter.textContent = `${remaining} characters remaining`;
+            counter.className = remaining < 100 ? 'text-warning float-end' : 'text-muted float-end';
+        }
+
+        prompt.addEventListener('input', updateCounter);
+        updateCounter();
+    }
+
+    // Form submission handling
+    const form = document.getElementById('storyForm');
+    const submitBtn = document.getElementById('generateBtn');
+    const btnText = submitBtn.querySelector('.btn-text');
+    const btnLoading = submitBtn.querySelector('.btn-loading');
+
+    form.addEventListener('submit', function(e) {
+        submitBtn.disabled = true;
+        btnText.classList.add('d-none');
+        btnLoading.classList.remove('d-none');
+    });
+
+    // Audio recording functionality (will be implemented in separate JS file)
+    {% if audio_supported %}
+    initializeAudioRecording();
+    {% endif %}
+});
+
+{% if audio_supported %}
+// Audio recording will be loaded from static/js/audio-recorder.js
+{% endif %}
+</script>
+{% endblock %}
